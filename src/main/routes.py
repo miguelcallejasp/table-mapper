@@ -1,13 +1,13 @@
 import sys
 import logging
 from src.main.utils import Response
-from src.main.model import Mapper
+from src.main.model import mapper
 from flask import request
 from flask import Blueprint
 from flask import json
 
 # Logging Configuration
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
                     format="%(asctime)-15s %(name)s - %(levelname)s - %(message)s")
 
 # Controller Routes for API Endpoints
@@ -22,7 +22,8 @@ def test():
 @controller.route("/update", methods=['POST'])
 def update():
     logging.info("Updating Map")
-    success_update = Mapper.cache(request.json)
+    #print(type(request.json))
+    success_update = mapper.cache(request.json)
     if success_update:
         return Response.response("This is a working progress", 200)
     else:

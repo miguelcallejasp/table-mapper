@@ -4,7 +4,7 @@ import sys
 from src.main.utils import utilities
 
 # Logging Methods
-log_level = os.getenv('LOG_LEVEL') if 'LOG_LEVEL' in os.environ else 'INFO'
+log_level = os.getenv('LOG_LEVEL') if 'LOG_LEVEL' in os.environ else 'DEBUG'
 level_attribute = utilities.guess_log(log_level)
 logging.basicConfig(stream=sys.stdout, level=level_attribute,
                     format="%(asctime)-15s %(name)s [%(levelname)s] %(message)s")
