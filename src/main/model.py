@@ -3,7 +3,10 @@ import logging
 import pandas as pd
 import os
 import sys
+import src.main.config as config
 from src.main.utils import utilities
+from google.cloud import datastore
+from google.oauth2 import service_account
 
 # Logging Methods
 log_level = os.getenv('LOG_LEVEL') if 'LOG_LEVEL' in os.environ else 'DEBUG'
@@ -12,14 +15,101 @@ logging.basicConfig(stream=sys.stdout, level=level_attribute,
                     format="%(asctime)-15s %(name)s [%(levelname)s] %(message)s")
 
 
-class Mapper(object):
+class Datastore(object):
+    # Global
+    google_sa_file = config.google_sa_file
+    google_project = config.google_project
+
+    def __init__(self):
+        logging.debug("Initializing Datastore")
+        self.credentials = service_account.Credentials.from_service_account_file(self.google_sa_file)
+        self.ds_client = datastore.Client(credentials=self.credentials, project=self.google_project)
+        self.memory_cache = None
+        self.string_datastore = "[DATASTORE]"
+
+    def build_entity(self, kind, name, elements):
+
+        # Map is a dictionary
+        """
+        :param kind:
+        :param name:
+        :param elements:
+        :return:
+
+        Database kind:name
+        { 'column1': 'value1',
+          'column2': 'value2 }
+        """
+
+        logging.debug("{} Building an entity from Dictionary".format(self.string_datastore))
+        kind_name = self.ds_client.key(kind, name)
+        logging.debug("{} Key Index for entity is: {} - {}".format(
+            self.string_datastore,
+            kind,
+            name
+        ))
+        entity = datastore.Entity(kind_name)
+        for k, v in elements.items():
+            entity[k] = v
+        return entity
+
+    def put(self, entity):
+        logging.debug("{} Adding to Datastore".format(self.string_datastore))
+        try:
+            self.ds_client.put(entity)
+        except Exception as error:
+            logging.error(error)
+
+    def put_many(self, list_of_entities):
+        logging.debug("{} Adding Multiple Entities to Datastore".format(self.string_datastore))
+        try:
+            if len(list_of_entities) > 499:
+                logging.warning("{} List is too long, it will be batched.".format(
+                    self.string_datastore
+                ))
+                for entity_batch in utilities.batch(list_of_entities, 300):
+                    self.ds_client.put_multi(entity_batch)
+            else:
+                logging.warning("{} List of entities will be inserted: {} elements.".format(
+                    self.string_datastore,
+                    len(list_of_entities)
+                ))
+                self.ds_client.put_multi(list_of_entities)
+        except Exception as error:
+            logging.error(error)
+
+    def fetch_all(self, kind):
+        query = self.ds_client.query(kind=kind)
+        try:
+            results = query.fetch()
+            entities = []
+            for lines in results:
+                logging.debug("{} Building Dataframe for Lookup:".format(
+                    self.string_datastore
+                ))
+                entities.append(lines)
+            # Adding the key entity in the table
+            for e in entities:  # go through entities
+                e['entity_key_name'] = e.key.name  # for example
+            self.memory_cache = pd.DataFrame(entities)
+            print(self.memory_cache)
+        except Exception as error:
+            logging.error("{} Couldn't fetch results. {}".format(
+                self.string_datastore,
+                error
+            ))
+
+
+class Mapper(Datastore):
     logging.debug("Mapper is being initialized")
 
     def __init__(self):
-        mapper = pd.DataFrame()
+        super().__init__()
+        self.mapper = pd.DataFrame()
         self.dict_schema = None
         self.dict_data = None
         # Internal built data
+        self.primary_keys: list = []  # This is a list for primary keys.
         self.dict_cache = None
         self.columns_schema: list = []
         self.data_rows: list = []
@@ -39,8 +129,13 @@ class Mapper(object):
             logging.info("{} Getting schema".format(self.string_cache))
             # Getting Schema from Json
             self.dict_schema = json_input.get('schema')
+            self.primary_keys = self.dict_schema.get('primaryKey')
             self.dict_data = json_input.get('data')
 
+            logging.debug("{} Primary Keys are: {}".format(
+                self.string_cache,
+                self.primary_keys
+            ))
             # Reading Schema
             for schema_keys in self.dict_schema.get('fields'):
                 self.columns_schema.append(schema_keys['name'])
@@ -60,12 +155,44 @@ class Mapper(object):
                 self.string_cache
             ))
             for schema_data in self.dict_data:
-                print(schema_data)
-                tuple_rowed = self.rowing_processing(schema_data)
-
+                # This is a list of tuples
+                self.data_rows.append(self.rowing_processing(schema_data))
         except Exception as error:
             logging.error(error)
+
+        try:
+            logging.info("{} Building a Dataframe Table".format(
+                self.string_cache
+            ))
+            self.build_table()
+        except Exception as error:
+            logging.error(error)
+
         return True
+
+    def build_table(self):
+        self.mapper = pd.DataFrame(
+            columns=self.columns_schema,
+            data=self.data_rows
+        )
+        # Dropping the duplicates in the memory cache
+        self.mapper.drop_duplicates(inplace=True, subset=self.primary_keys)
+        # Saving to google store with a made up Kind
+        print(self.mapper)
+        self.update_datastore()
+
+    def update_datastore(self):
+        logging.debug("{} Loading Entities for Datastore".format(self.string_cache))
+        entities = []
+        for index, row in self.mapper.iterrows():
+            unique_dictionary = {}
+            for columns in row.items():
+                unique_dictionary[columns[0]] = columns[1]
+            kind = self.primary_keys[0]
+            name = unique_dictionary.pop(self.primary_keys[0])
+            entities.append(super().build_entity(kind, name, unique_dictionary))
+
+        super().put_many(list_of_entities=entities)
 
     def rowing_processing(self, schema_data_row) -> tuple:
         # Columns for Schema found: ['index', 'collectionCode', 'hash', 'tenant', 'thingType']
@@ -78,3 +205,24 @@ class Mapper(object):
 
 
 mapper = Mapper()
+
+
+class Looker(Datastore):
+    def __init__(self):
+        self.parameters = None
+        self.looker_string = "[LOOKER]"
+        super().__init__()
+
+    def check_memory(self, kind):
+        logging.debug("{} Looking if memory is ready")
+        if len(self.memory_cache != 0):
+            logging.debug("{} Mem is present for this kind")
+    def build_memory(self, kind):
+        logging.debug("{} Building Memory from kind: {}".format(
+            self.looker_string,
+            kind
+        ))
+
+        super().fetch_all(kind)
+
+looker = Looker()

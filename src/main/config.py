@@ -12,3 +12,5 @@ logging.basicConfig(stream=sys.stdout, level=level_attribute,
 
 flask_app_host = "0.0.0.0"
 flask_app_port = "8080"
+google_sa_file = "/Users/miguelcallejas/Documents/gsa.json"
+google_project = "devops-db-resources"
