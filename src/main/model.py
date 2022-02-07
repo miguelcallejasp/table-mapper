@@ -22,8 +22,11 @@ class Datastore(object):
 
     def __init__(self):
         logging.debug("Initializing Datastore")
-        self.credentials = service_account.Credentials.from_service_account_file(self.google_sa_file)
-        self.ds_client = datastore.Client(credentials=self.credentials, project=self.google_project)
+        if not config.serverless:
+            self.credentials = service_account.Credentials.from_service_account_file(self.google_sa_file)
+            self.ds_client = datastore.Client(credentials=self.credentials, project=self.google_project)
+        else:
+            self.ds_client = datastore.Client()
         self.memory_cache = pd.DataFrame()
         self.string_datastore = "[DATASTORE]"
 
@@ -96,7 +99,6 @@ class Datastore(object):
                 e['entity_key_name'] = e.key.name
                 e[e.key.kind] = e.key.kind
             self.memory_cache = pd.DataFrame(entities)
-            print(self.memory_cache)
         except Exception as error:
             logging.error("{} Couldn't fetch results. {}".format(
                 self.string_datastore,
@@ -182,7 +184,6 @@ class Mapper(Datastore):
         # Dropping the duplicates in the memory cache
         self.mapper.drop_duplicates(inplace=True, subset=self.primary_keys)
         # Saving to google store with a made up Kind
-        print(self.mapper)
         self.update_datastore()
 
     def update_datastore(self):
@@ -221,21 +222,19 @@ class Looker(Datastore):
         logging.debug("{} Looking if memory is ready".format(self.string_looker))
         if len(super().return_memory()) != 0:
             logging.debug("{} Mem is present. See if the kind is correct.".format(self.string_looker))
-            print(str(list(self.memory_cache.columns)))
             if kind in list(self.memory_cache.columns):
                 logging.debug("{} Kind is present".format(self.string_looker))
                 return True
         else:
             logging.warning("No memory is loaded. Loading...")
             self.build_memory(kind)
-            return False
+            return True
 
     def build_memory(self, kind):
         logging.debug("{} Building Memory from kind: {}".format(
             self.string_looker,
             kind
         ))
-
         super().fetch_all(kind)
 
     def look_in_memory(self, kind, name):
@@ -244,13 +243,8 @@ class Looker(Datastore):
             kind,
             name
         ))
-        print("---1")
-        print(self.memory_cache)
-        self.memory_cache.to_csv("debug.csv")
-        print("---2")
-        print(self.memory_cache[kind] == name)
         result = self.memory_cache.loc[self.memory_cache['entity_key_name'] == name]
-        print(result)
         return result.reset_index(drop=True).to_json(orient='records')
+
 
 looker = Looker()

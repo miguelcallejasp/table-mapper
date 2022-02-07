@@ -1,9 +1,9 @@
-runtime: python37
+runtime: python39
 
 instance_class: F1  #0.5cores 0.5GB
-service: ytem-db-mapper
-entrypoint: python src/main/main.py
-
+service: default
+entrypoint: python3 src/main/main.py
+service_account: db-mapper@devops-db-resources.iam.gserviceaccount.com
 env_variables:
   SERVERLESS_MODE: true
   PYTHONPATH: /srv

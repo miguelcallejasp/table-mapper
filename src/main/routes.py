@@ -32,25 +32,18 @@ def update():
     # Mapper.update()
 
 
-@controller.route("/search", methods=['GET'])
-def search():
+@controller.route("/search/<kind>/<value>", methods=['GET'])
+def search(kind, value):
     logging.info("Getting Info")
-    print(request.args.to_dict())
-    search_fields = request.args.to_dict()
-
-    success_update = True
-    kind = list(search_fields.keys())[0]
-    values = list(search_fields.values())[0]
-
     memory_ready = looker.check_memory(kind)
+
     if memory_ready:
-        response = looker.look_in_memory(kind, values)
+        response = looker.look_in_memory(kind, value)
         print(response)
     else:
         looker.build_memory(kind)
-        response = looker.look_in_memory(kind, values)
+        response = looker.look_in_memory(kind, value)
         print(response)
-
     if response:
         return Response.response(json.loads(response), 200)
     else:
