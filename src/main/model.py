@@ -24,8 +24,11 @@ class Datastore(object):
         logging.debug("Initializing Datastore")
         self.credentials = service_account.Credentials.from_service_account_file(self.google_sa_file)
         self.ds_client = datastore.Client(credentials=self.credentials, project=self.google_project)
-        self.memory_cache = None
+        self.memory_cache = pd.DataFrame()
         self.string_datastore = "[DATASTORE]"
+
+    def return_memory(self):
+        return self.memory_cache
 
     def build_entity(self, kind, name, elements):
 
@@ -83,14 +86,15 @@ class Datastore(object):
         try:
             results = query.fetch()
             entities = []
+            logging.debug("{} Building Dataframe for lookup.".format(
+                self.string_datastore
+            ))
             for lines in results:
-                logging.debug("{} Building Dataframe for Lookup:".format(
-                    self.string_datastore
-                ))
                 entities.append(lines)
             # Adding the key entity in the table
             for e in entities:  # go through entities
-                e['entity_key_name'] = e.key.name  # for example
+                e['entity_key_name'] = e.key.name
+                e[e.key.kind] = e.key.kind
             self.memory_cache = pd.DataFrame(entities)
             print(self.memory_cache)
         except Exception as error:
@@ -210,19 +214,43 @@ mapper = Mapper()
 class Looker(Datastore):
     def __init__(self):
         self.parameters = None
-        self.looker_string = "[LOOKER]"
+        self.string_looker = "[LOOKER]"
         super().__init__()
 
-    def check_memory(self, kind):
-        logging.debug("{} Looking if memory is ready")
-        if len(self.memory_cache != 0):
-            logging.debug("{} Mem is present for this kind")
+    def check_memory(self, kind) -> bool:
+        logging.debug("{} Looking if memory is ready".format(self.string_looker))
+        if len(super().return_memory()) != 0:
+            logging.debug("{} Mem is present. See if the kind is correct.".format(self.string_looker))
+            print(str(list(self.memory_cache.columns)))
+            if kind in list(self.memory_cache.columns):
+                logging.debug("{} Kind is present".format(self.string_looker))
+                return True
+        else:
+            logging.warning("No memory is loaded. Loading...")
+            self.build_memory(kind)
+            return False
+
     def build_memory(self, kind):
         logging.debug("{} Building Memory from kind: {}".format(
-            self.looker_string,
+            self.string_looker,
             kind
         ))
 
         super().fetch_all(kind)
+
+    def look_in_memory(self, kind, name):
+        logging.debug("{} Looking for {} - {}".format(
+            self.string_looker,
+            kind,
+            name
+        ))
+        print("---1")
+        print(self.memory_cache)
+        self.memory_cache.to_csv("debug.csv")
+        print("---2")
+        print(self.memory_cache[kind] == name)
+        result = self.memory_cache.loc[self.memory_cache['entity_key_name'] == name]
+        print(result)
+        return result.reset_index(drop=True).to_json(orient='records')
 
 looker = Looker()

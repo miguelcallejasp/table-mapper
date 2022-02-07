@@ -11,7 +11,7 @@ class Response(object):
 
     @staticmethod
     def response(message, status_code):
-        return jsonify(message=str(message),
+        return jsonify(message=message,
                        status=status_code), status_code
 
 

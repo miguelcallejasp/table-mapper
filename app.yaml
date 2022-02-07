@@ -1,0 +1,16 @@
+runtime: python37
+
+instance_class: F1  #0.5cores 0.5GB
+service: ytem-db-mapper
+entrypoint: python src/main/main.py
+
+env_variables:
+  SERVERLESS_MODE: true
+  PYTHONPATH: /srv
+  LOG_LEVEL: 'DEBUG'
+
+handlers:
+- url: /.*
+  secure: always
+  redirect_http_response_code: 301
+  script: auto

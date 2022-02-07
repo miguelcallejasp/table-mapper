@@ -36,11 +36,23 @@ def update():
 def search():
     logging.info("Getting Info")
     print(request.args.to_dict())
+    search_fields = request.args.to_dict()
+
     success_update = True
-    kind = 'hash'
-    looker.check_memory(kind)
-    if success_update:
-        return Response.response("Searching Result", 200)
+    kind = list(search_fields.keys())[0]
+    values = list(search_fields.values())[0]
+
+    memory_ready = looker.check_memory(kind)
+    if memory_ready:
+        response = looker.look_in_memory(kind, values)
+        print(response)
+    else:
+        looker.build_memory(kind)
+        response = looker.look_in_memory(kind, values)
+        print(response)
+
+    if response:
+        return Response.response(json.loads(response), 200)
     else:
         return Response.response("Something went wrong", 500)
     # Mapper.update()
