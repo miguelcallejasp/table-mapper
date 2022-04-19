@@ -3,6 +3,7 @@ import logging
 from src.main.utils import Response
 from src.main.model import mapper
 from src.main.model import looker
+import src.main.config as config
 from flask import request
 from flask import Blueprint
 from flask import json
@@ -26,7 +27,7 @@ def update():
     # print(type(request.json))
     success_update = mapper.cache(request.json)
     if success_update:
-        return Response.response("This is a working progress", 200)
+        return Response.response("Update successful", 200)
     else:
         return Response.response("Something went wrong", 500)
     # Mapper.update()
@@ -35,8 +36,16 @@ def update():
 @controller.route("/search/<kind>/<value>", methods=['GET'])
 def search(kind, value):
     logging.info("Getting Info")
-    memory_ready = looker.check_memory(kind)
 
+    # This part is so in Datastore there is a staging phase to make testing
+    if config.staging:
+        logging.info("[SEARCH] Working with Staging data")
+        kind = kind + str("-staging")
+    else:
+        logging.info("[SEARCH] Working with Production data")
+        kind = kind
+
+    memory_ready = looker.check_memory(kind)
     if memory_ready:
         response = looker.look_in_memory(kind, value)
         print(response)

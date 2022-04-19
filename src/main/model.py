@@ -15,6 +15,8 @@ logging.basicConfig(stream=sys.stdout, level=level_attribute,
                     format="%(asctime)-15s %(name)s [%(levelname)s] %(message)s")
 
 
+# TODO: Migrate to Firebase Datastore
+
 class Datastore(object):
     # Global
     google_sa_file = config.google_sa_file
@@ -96,6 +98,9 @@ class Datastore(object):
                 entities.append(lines)
             # Adding the key entity in the table
             for e in entities:  # go through entities
+                print(e)
+                print(e.key.name)
+                print(e.key.kind)
                 e['entity_key_name'] = e.key.name
                 e[e.key.kind] = e.key.kind
             self.memory_cache = pd.DataFrame(entities)
@@ -193,7 +198,15 @@ class Mapper(Datastore):
             unique_dictionary = {}
             for columns in row.items():
                 unique_dictionary[columns[0]] = columns[1]
-            kind = self.primary_keys[0]
+
+            # This part is so in Datastore there is a staging phase to make testing
+            if config.staging:
+                logging.info("Working with Staging data")
+                kind = self.primary_keys[0] + str("-staging")
+            else:
+                logging.info("Working with Production data")
+                kind = self.primary_keys[0]
+
             name = unique_dictionary.pop(self.primary_keys[0])
             entities.append(super().build_entity(kind, name, unique_dictionary))
 
